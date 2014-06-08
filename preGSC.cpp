@@ -18,29 +18,26 @@
 	#include <sys/stat.h>
 #endif
 
-// class: When using cls->func(), we won't ever know for sure for which class is the entity assigned to, because no types in GSC! No idea how to solve it.
-//        It is not a problem with local variables, but it is for entity-based ones.
-//        ( Like one entity type can have 2 different classes under the same name: self.asd := cls() and self.asd := cls2() )
-//        UPDATE: Can be solved in run-time with cls->func() to cls level.__clsf[self.__clsid + "_func"]
 /*
-	class className:parentType
+Use spawnStruct(), it is passed by reference
+
+class className
+{
+	constructor(p1, p2)
 	{
-		constructor(p1, p2)
-		{
-			self.value = p1 * p2;
-		}
-		measure()							===========>			className_measure()
-		{
-			return self.value - 1;
-		}
+		self.value = p1 * p2;
 	}
+	measure()
+	{
+		return self.value - 1;
+	}
+}
 
-	test := className(4, weaponid);			===========>			test := spawn(parentType, (0, 0, 0)); test className_constructor();
-	level.test = test->measure();			===========>			level.test = test className_measure();
-	sth = test.value;
-	test delete();
+test := className(4, weaponid);			===========>			test := spawnStruct(); test className_constructor(4, weaponid);
+cls->func(params)						===========>			[[level.__clsf[self.__clsid + "_func"]]](cls, params);
+sth = test.value;
 
-	//map<string, string> classVars; varName -> className
+//map<string, string> classVars; varName -> className
 */
 
 using namespace std;
@@ -721,24 +718,24 @@ string eval(const size_t last, map<string, string> refs, const string &s, size_t
 		{
 			++i;
 			string t = readVar(last, "hexadecimal color value", s, i, n);
-			if (t.size() != 8)
-				error(ERR_CUSTOM, last, s, i, n, "hexadecimal color value is expected to be 8 character long, but it is " + t.size());
+			if (t.size() != 6)
+				error(ERR_CUSTOM, last, s, i, n, "hexadecimal color value is expected to be 6 character long, but it is " + to_string(t.size()));
 			
 			size_t q;
 			size_t r = stoul(t, &q, 16);
-			if (q != 8)
+			if (q != 6)
 				error(ERR_CUSTOM, last, s, i, n, t + " is not a valid hexadecimal value (invalid character: '" + to_string(t[q - 1]) + "')");
 
 			t = "";
-			for (q = 0; q < 4; ++q)
+			for (q = 0; q < 3; ++q)
 			{
 				if (q)
-					t = ' ' + t;
+					t = ',' + t;
 
 				t = to_string(((r % 256) / 255.0)) + t;
 				r /= 256;
 			}
-			temp += t;
+			temp += '(' + t + ')';
 			continue;
 		}
 		else if (isVar(s[i]))
@@ -1239,56 +1236,15 @@ string eval(const size_t last, map<string, string> refs, const string &s, size_t
 						}
 						/*else if (!last && v == "class")
 						{
-							// Ignore spaces
-							while (isspace(s[i]) && ++i < n);
-
-							if (i == n)
-								error(ERR_EOF, last);
-							if (!isVar(s[i]))
-								error(ERR_EXPECT, last, "class name", string(1, s[i]));
+							readSpace(last, temp, s, i, n);
 
 							// Get classname
-							string t;
-							do
-								t += s[i];
-							while (++i < n && isVar(s[i]));
-
-							if (i == n)
-								error(ERR_EOF, last);
+							string t = readVar(last, "class name", s, i, n);
 							
-							// Ignore spaces ~ Maybe a newline here
-							if (debug)
-								 while (isspace(s[i]) && ++i < n) { if (s[i - 1] == '\n') temp += '\n'; }
-							else
-								while (isspace(s[i]) && ++i < n);
-							
-							// Get parent entity
-							string ent;
-							if (s[i] == ':')
-							{
-								// Get entity name
-								ent = "";
-								while (++i < n && isVar(s[i])) { ent += s[i]; }
+							readSpace(last, temp, s, i, n);
 
-								if (ent.empty())
-									error(ERR_EXPECT, last, "parent entity name", string(1, s[i]));
-
-								// Ignore spaces ~ Maybe a newline here
-								if (debug)
-									 while (isspace(s[i]) && ++i < n) { if (s[i - 1] == '\n') temp += '\n'; }
-								else
-									while (isspace(s[i]) && ++i < n);
-
-								if (s[i] != '{')
-									error(ERR_EXPECT, last, "{", string(1, s[i]));
-							}
-							else
-							{
-								if (s[i] != '{')
-									error(ERR_EXPECT, last, "{' or ':", string(1, s[i]));
-
-								ent = "script_origin";
-							}
+							if (s[i] != '{')
+								error(ERR_EXPECT, last, s, i, n, "{", string(1, s[i]));
 
 							// TODO
 						}*/
@@ -1355,6 +1311,36 @@ string eval(const size_t last, map<string, string> refs, const string &s, size_t
 						{
 							holders = SIZE_MAX - 1;
 							proc = false;
+						}
+						else if (v[0] == '0' && v[1] == 'x') // Hexadecimal
+						{
+							try
+							{
+								temp += to_string(stoul(v, nullptr, 16));
+							}
+							catch (const invalid_argument&)
+							{
+								error(ERR_CUSTOM, last, s, i, n, '\'' + v + "' is not a valid hexadecimal value");
+							}
+							catch (const out_of_range&)
+							{
+								error(ERR_CUSTOM, last, s, i, n, '\'' + v + "' is a too big hexadecimal value");
+							}
+						}
+						else if (v[0] == '0' && v.size() > 1) // Octal
+						{
+							try
+							{
+								temp += to_string(stoul(v, nullptr, 8));
+							}
+							catch (const invalid_argument&)
+							{
+								error(ERR_CUSTOM, last, s, i, n, '\'' + v + "' is not a valid octal value");
+							}
+							catch (const out_of_range&)
+							{
+								error(ERR_CUSTOM, last, s, i, n, '\'' + v + "' is a too big octal value");
+							}
 						}
 						else if (searchparam != nullptr)
 						{
@@ -1445,11 +1431,23 @@ string eval(const size_t last, map<string, string> refs, const string &s, size_t
 	return part + temp;
 }
 
+void makeDir(const string d)
+{
+	#ifdef _WIN32
+		_mkdir(d.c_str());
+	#else
+		mkdir(d.c_str(), 0777);
+	#endif
+}
+
 bool listFiles(const string name = "")
 {
 	DIR *dir = opendir((infold + '/' + name).c_str());
     if (dir != NULL)
 	{
+		// Create directory
+		makeDir(outfold + '/' + name);
+
 		struct dirent *ent;
 		while ((ent = readdir(dir)) != NULL)
 		{
@@ -1475,11 +1473,11 @@ bool listFiles(const string name = "")
 						par.clear();
 						inherit.clear();
 						//classVars.clear();
-						#ifdef _WIN32
+						/*#ifdef _WIN32
 							_mkdir((outfold + '/' + name).c_str());
 						#else
 							mkdir((outfold + '/' + name).c_str(), 0777);
-						#endif
+						#endif*/
 						ofstream g((outfold + '/' + x).c_str());
 						map<string, string> m;
 						g << eval(0, m, s, i, n);
@@ -1515,7 +1513,7 @@ bool listFiles(const string name = "")
 				break;
 				case DT_DIR:
 					if (string(ent->d_name) != "." && string(ent->d_name) != "..")
-					listFiles(x);
+						listFiles(x);
 				break;
 			}
 		}
@@ -1599,6 +1597,7 @@ int main(int argc, char* argv[])
 		cout << "Done!" << endl;
 		
 		// Process files
+		makeDir(outfold);
 		if (listFiles())
 		{
 			cout << "Saving pregsc.dat... ";

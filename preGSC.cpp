@@ -1485,7 +1485,7 @@ bool listFiles(const string name = "")
 						if (!functions.empty())
 						{
 							writeFunction(g, "sif", "__sif(c,y,n){if(c)return y;else return n;}");
-							writeFunction(g, "par", "__par(a,b){k=getArrayKeys(a);c=a.size;s=b+\" = array(\";for(i=0;i<c;i++){if(i)s+=\", \";s+=\"[\"+k[i]+\"] => \"+a[k[i]];}s+=\")\";iPrintLn(s);printLn(s)}");
+							writeFunction(g, "par", "__par(a,b){k=getArrayKeys(a);c=a.size;s=b+\" = array(\";for(i=0;i<c;i++){if(i)s+=\", \";s+=\"[\"+k[i]+\"] => \"+a[k[i]];}s+=\")\";iPrintLn(s);printLn(s);}");
 						}
 
 						if (!ext.empty())
